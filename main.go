@@ -3,6 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"os"
+	"os/signal"
 	"time"
 
 	"github.com/prometheus/client_golang/api"
@@ -13,7 +17,7 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func main() {
+func upgradeLoop() {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
@@ -61,4 +65,45 @@ func main() {
 
 		time.Sleep(5 * time.Second)
 	}
+}
+
+func main() {
+
+	http.HandleFunc("/alert", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		defer r.Body.Close()
+		alert, err := ioutil.ReadAll(r.Body)
+		if err != nil {
+			fmt.Printf("failed to read post body: %v\n", err)
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
+		fmt.Printf("Received an alert: %v\n", alert)
+		w.WriteHeader(http.StatusOK)
+	})
+
+	var srv http.Server
+
+	idleConnsClosed := make(chan struct{})
+	go func() {
+		sigint := make(chan os.Signal, 1)
+		signal.Notify(sigint, os.Interrupt)
+		<-sigint
+
+		if err := srv.Shutdown(context.Background()); err != nil {
+			fmt.Printf("HTTP Server Shutdown Error: %v\n", err)
+		}
+		close(idleConnsClosed)
+	}()
+
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
+		fmt.Printf("HTTP Server Failed to start: %v\n", err)
+	}
+
+	<-idleConnsClosed
 }
