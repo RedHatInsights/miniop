@@ -87,7 +87,9 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	var srv http.Server
+	srv := http.Server{
+		Addr: ":8080",
+	}
 
 	idleConnsClosed := make(chan struct{})
 	go func() {
@@ -101,7 +103,7 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	if err := srv.ListenAndServe(":8080"); err != http.ErrServerClosed {
+	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		fmt.Printf("HTTP Server Failed to start: %v\n", err)
 		panic(err.Error())
 	}
