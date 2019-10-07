@@ -103,6 +103,7 @@ func main() {
 
 	if err := srv.ListenAndServe(":8080"); err != http.ErrServerClosed {
 		fmt.Printf("HTTP Server Failed to start: %v\n", err)
+		panic(err.Error())
 	}
 
 	<-idleConnsClosed
