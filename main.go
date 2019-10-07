@@ -25,7 +25,7 @@ func main() {
 	}
 
 	promclient, err := api.NewClient(prom.Config{
-		Address: "http://prometheus.mnm.svc.local:9090",
+		Address: "http://prometheus.mnm.svc:9090",
 	})
 
 	if err != nil {
