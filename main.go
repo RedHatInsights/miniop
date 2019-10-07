@@ -69,7 +69,7 @@ func upgradeLoop() {
 
 func main() {
 
-	http.HandleFunc("/alert", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/kill", func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != "POST" {
 			w.WriteHeader(http.StatusMethodNotAllowed)
 			return
@@ -83,7 +83,7 @@ func main() {
 			return
 		}
 
-		fmt.Printf("Received an alert: %v\n", alert)
+		fmt.Printf("Received an alert: %s\n", alert)
 		w.WriteHeader(http.StatusOK)
 	})
 
