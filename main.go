@@ -2,20 +2,19 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
+	"time"
 
-	"github.com/prometheus/alertmanager/notify/webhook"
-	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"github.com/go-chi/chi"
+	"github.com/go-chi/chi/middleware"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
+var config *rest.Config
 var clientset *kubernetes.Clientset
 
 func init() {
@@ -30,60 +29,15 @@ func init() {
 	}
 }
 
-func kill(pod string) (int, error) {
-	p, err := clientset.CoreV1().Pods("").Get(pod, metav1.GetOptions{})
-	if errors.IsNotFound(err) {
-		return http.StatusNotFound, err
-	} else if _, isStatus := err.(*errors.StatusError); isStatus {
-		return http.StatusInternalServerError, err
-	} else if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	err = clientset.CoreV1().Pods(p.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
-	if err != nil {
-		return http.StatusInternalServerError, err
-	}
-
-	return http.StatusOK, nil
-}
-
 func main() {
 
-	http.HandleFunc("/kill", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != "POST" {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-
-		defer r.Body.Close()
-		webhookBody, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			fmt.Printf("failed to read post body: %v\n", err)
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
-
-		var message webhook.Message
-		err = json.Unmarshal(webhookBody, &message)
-		if err != nil {
-			fmt.Printf("failed to unmarshal json: %v\n", err)
-			w.WriteHeader(http.StatusBadRequest)
-			return
-		}
-
-		fmt.Printf("Got a request to kill %s", message.CommonLabels["kubernetes_pod_name"])
-
-		code, err := kill(message.CommonLabels["kubernetes_pod_name"])
-		if err != nil {
-			fmt.Printf("failed to kill pod: %v", err)
-		}
-
-		w.WriteHeader(code)
-	})
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Post("/kill", killHandler)
 
 	srv := http.Server{
-		Addr: ":8080",
+		Addr:    ":8080",
+		Handler: r,
 	}
 
 	idleConnsClosed := make(chan struct{})
@@ -97,6 +51,19 @@ func main() {
 		}
 		close(idleConnsClosed)
 	}()
+
+	// start deployment scanner
+	go func(done chan struct{}) {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				getCanaryDeployments()
+				time.Sleep(10 * time.Second)
+			}
+		}
+	}(idleConnsClosed)
 
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		fmt.Printf("HTTP Server Failed to start: %v\n", err)

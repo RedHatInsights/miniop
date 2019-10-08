@@ -3,9 +3,12 @@ module github.com/redhatinsights/miniop
 go 1.12
 
 require (
+	github.com/go-chi/chi v4.0.2+incompatible
 	github.com/gogo/protobuf v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
+	github.com/openshift/api v3.9.0+incompatible // indirect
+	github.com/openshift/client-go v3.9.0+incompatible
 	github.com/prometheus/alertmanager v0.19.0
 	github.com/prometheus/client_golang v1.1.0
 	golang.org/x/crypto v0.0.0-20191002192127-34f69633bfdc // indirect
