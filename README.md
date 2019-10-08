@@ -13,7 +13,8 @@ It depends on two non-trivial services to function:
 2. quay.io
 
 To have Canary Keeper manage a deployment you must annotate the deployment with
-a label that contains the pullspec for a quay repo that you wish to test.
+a label indicating that it should be managed and a label that contains the
+pullspec for a quay repo that you wish to test.
 
 Something kind of like this:
 
@@ -24,7 +25,8 @@ metadata:
     name: my-app
     labels:
         app: my-app
-        canary: quay.io/myorg/my_repo:latest
+        canary: true
+        canary-image: quay.io/myorg/my_repo:latest
 spec:
     template:
         spec:
