@@ -23,7 +23,7 @@ func getCanaryDeployments() {
 		return
 	}
 	if len(dcs.Items) == 0 {
-		fmt.Printf("0 deployment configs to be managed")
+		fmt.Printf("0 deployment configs to be managed\n")
 		return
 	}
 

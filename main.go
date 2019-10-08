@@ -10,6 +10,7 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func main() {
@@ -17,6 +18,7 @@ func main() {
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Post("/kill", killHandler)
+	r.Handle("/metrics", promhttp.Handler())
 
 	srv := http.Server{
 		Addr:    ":8080",
@@ -48,6 +50,7 @@ func main() {
 		}
 	}(idleConnsClosed)
 
+	fmt.Printf("Starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		fmt.Printf("HTTP Server Failed to start: %v\n", err)
 		panic(err.Error())
