@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 
+	v1 "github.com/openshift/api/apps/v1"
 	appsv1 "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	"github.com/redhatinsights/miniop/client"
+	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -24,14 +26,65 @@ func getCanaryDeployments() {
 		fmt.Printf("0 deployment configs to be managed")
 		return
 	}
+
 	for _, dc := range dcs.Items {
-		image, ok := dc.Annotations["canary-image"]
-		if !ok {
-			fmt.Printf("dc %s does not have an image defined. skipping...\n", dc.Name)
+		_, ok := dc.Annotations["canary-pod"]
+		if ok {
+			fmt.Printf("a canary pod for %s already exists", dc.Name)
 			continue
 		}
-		for _, container := range dc.Spec.Template.Spec.Containers {
-			fmt.Printf("comparing %s to %s\n", container.Image, image)
+		podName, err := spawnCanary(dc)
+		if err != nil {
+			fmt.Printf("Failed to spawn canary: %v", err)
+			continue
 		}
+		dc.Annotations["canary-pod"] = podName
+		cl.DeploymentConfigs(client.GetNamespace()).Update(&dc)
 	}
+}
+
+func spawnCanary(dc v1.DeploymentConfig) (string, error) {
+	podTemplateSpec := dc.Spec.Template.DeepCopy()
+	clientset := client.GetClientset()
+
+	name, ok := dc.Annotations["canary-name"]
+	if !ok {
+		return "", fmt.Errorf("dc %s does not have an container name defined", dc.Name)
+	}
+	image, ok := dc.Annotations["canary-image"]
+	if !ok {
+		return "", fmt.Errorf("dc %s does not have an image defined", dc.Name)
+	}
+
+	for idx, container := range podTemplateSpec.Spec.Containers {
+		if container.Name == name && container.Image != image {
+			podTemplateSpec.Spec.Containers[idx].Image = image
+			break
+		}
+		return "", fmt.Errorf("dc has no images to upgrade")
+	}
+
+	pods, err := clientset.CoreV1().Pods(podTemplateSpec.Namespace).List(metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("canary=%s", podTemplateSpec.Name),
+	})
+	if err != nil {
+		return "", fmt.Errorf("Failed to search for pods: %v", err)
+	}
+
+	if len(pods.Items) > 0 {
+		return "", fmt.Errorf("A canary for this (%s) deployment already exists", podTemplateSpec.Name)
+	}
+
+	delete(podTemplateSpec.ObjectMeta.Labels, "deploymentconfig")
+	podTemplateSpec.ObjectMeta.Labels["canary"] = podTemplateSpec.Name
+
+	pod, err := clientset.CoreV1().Pods(podTemplateSpec.Namespace).Create(&apiv1.Pod{
+		Spec:       podTemplateSpec.Spec,
+		ObjectMeta: podTemplateSpec.ObjectMeta,
+	})
+	if err != nil {
+		return "", fmt.Errorf("Failed to create pod: %v", err)
+	}
+
+	return pod.Name, nil
 }
