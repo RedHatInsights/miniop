@@ -12,7 +12,6 @@ import (
 	"github.com/go-chi/chi/middleware"
 )
 
-
 func main() {
 
 	r := chi.NewRouter()
@@ -38,6 +37,7 @@ func main() {
 
 	// start deployment scanner
 	go func(done chan struct{}) {
+		fmt.Println("Starting deployment scanner...")
 		for {
 			select {
 			case <-done:
