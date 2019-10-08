@@ -50,7 +50,7 @@ func main() {
 		}
 	}(idleConnsClosed)
 
-	fmt.Printf("Starting web server")
+	fmt.Println("Starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
 		fmt.Printf("HTTP Server Failed to start: %v\n", err)
 		panic(err.Error())

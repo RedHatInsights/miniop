@@ -30,12 +30,12 @@ func getCanaryDeployments() {
 	for _, dc := range dcs.Items {
 		_, ok := dc.Annotations["canary-pod"]
 		if ok {
-			fmt.Printf("a canary pod for %s already exists", dc.Name)
+			fmt.Printf("a canary pod for %s already exists\n", dc.Name)
 			continue
 		}
 		podName, err := spawnCanary(dc)
 		if err != nil {
-			fmt.Printf("Failed to spawn canary: %v", err)
+			fmt.Printf("Failed to spawn canary: %v\n", err)
 			continue
 		}
 		dc.Annotations["canary-pod"] = podName
@@ -64,7 +64,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 		return "", fmt.Errorf("dc has no images to upgrade")
 	}
 
-	pods, err := clientset.CoreV1().Pods(podTemplateSpec.Namespace).List(metav1.ListOptions{
+	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("canary=%s", podTemplateSpec.Name),
 	})
 	if err != nil {
@@ -78,7 +78,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	delete(podTemplateSpec.ObjectMeta.Labels, "deploymentconfig")
 	podTemplateSpec.ObjectMeta.Labels["canary"] = podTemplateSpec.Name
 
-	pod, err := clientset.CoreV1().Pods(podTemplateSpec.Namespace).Create(&apiv1.Pod{
+	pod, err := clientset.CoreV1().Pods(client.GetNamespace()).Create(&apiv1.Pod{
 		Spec:       podTemplateSpec.Spec,
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 	})
