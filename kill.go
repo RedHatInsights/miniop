@@ -14,7 +14,7 @@ import (
 
 func kill(pod string) (int, error) {
 	clientset := client.GetClientset()
-	p, err := clientset.CoreV1().Pods("").Get(pod, metav1.GetOptions{})
+	p, err := clientset.CoreV1().Pods(client.GetNamespace()).Get(pod, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return http.StatusNotFound, err
 	} else if _, isStatus := err.(*errors.StatusError); isStatus {
@@ -23,7 +23,7 @@ func kill(pod string) (int, error) {
 		return http.StatusInternalServerError, err
 	}
 
-	err = clientset.CoreV1().Pods(p.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
+	err = clientset.CoreV1().Pods(client.GetNamespace()).Delete(p.GetName(), &metav1.DeleteOptions{})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
@@ -48,7 +48,7 @@ func killHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	fmt.Printf("Got a request to kill %s", message.CommonLabels["kubernetes_pod_name"])
+	fmt.Printf("Got a request to kill %s\n", message.CommonLabels["kubernetes_pod_name"])
 
 	code, err := kill(message.CommonLabels["kubernetes_pod_name"])
 	if err != nil {
