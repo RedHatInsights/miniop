@@ -26,7 +26,7 @@ func GetClientset() *kubernetes.Clientset {
 	if Clientset != nil {
 		return Clientset
 	}
-	Clientset, err := kubernetes.NewForConfig(Config)
+	Clientset, err := kubernetes.NewForConfig(GetConfig())
 	if err != nil {
 		panic(err.Error())
 	}
