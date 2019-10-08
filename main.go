@@ -10,24 +10,8 @@ import (
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
-var config *rest.Config
-var clientset *kubernetes.Clientset
-
-func init() {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		panic(err.Error())
-	}
-
-	clientset, err = kubernetes.NewForConfig(config)
-	if err != nil {
-		panic(err.Error())
-	}
-}
 
 func main() {
 

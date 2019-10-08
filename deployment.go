@@ -4,11 +4,12 @@ import (
 	"fmt"
 
 	appsv1 "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
+	"github.com/redhatinsights/miniop/client"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func getCanaryDeployments() {
-	client, err := appsv1.NewForConfig(config)
+	client, err := appsv1.NewForConfig(client.Config)
 	if err != nil {
 		panic(err.Error())
 	}
