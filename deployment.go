@@ -9,11 +9,11 @@ import (
 )
 
 func getCanaryDeployments() {
-	client, err := appsv1.NewForConfig(client.GetConfig())
+	cl, err := appsv1.NewForConfig(client.GetConfig())
 	if err != nil {
 		panic(err.Error())
 	}
-	dcs, err := client.DeploymentConfigs("").List(metav1.ListOptions{
+	dcs, err := cl.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})
 	if err != nil {
