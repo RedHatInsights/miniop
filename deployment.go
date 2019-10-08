@@ -27,7 +27,7 @@ func getCanaryDeployments() {
 		return
 	}
 	for _, dc := range dcs.Items {
-		image, ok := dc.Labels["canary-image"]
+		image, ok := dc.Annotations["canary-image"]
 		if !ok {
 			fmt.Printf("dc %s does not have an image defined. skipping...\n", dc.Name)
 			continue
