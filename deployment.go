@@ -9,12 +9,10 @@ import (
 )
 
 func getCanaryDeployments() {
-	fmt.Println("About to load the config")
 	cl, err := appsv1.NewForConfig(client.GetConfig())
 	if err != nil {
 		panic(err.Error())
 	}
-	fmt.Printf("About to get the list of deployments in the following namespace: %s\n", client.GetNamespace())
 	dcs, err := cl.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})

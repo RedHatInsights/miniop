@@ -37,14 +37,13 @@ func main() {
 
 	// start deployment scanner
 	go func(done chan struct{}) {
-		fmt.Println("Starting deployment scanner...")
 		for {
 			select {
 			case <-done:
 				return
 			default:
 				getCanaryDeployments()
-				time.Sleep(10 * time.Second)
+				time.Sleep(2 * time.Minute)
 			}
 		}
 	}(idleConnsClosed)
