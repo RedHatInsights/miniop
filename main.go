@@ -2,69 +2,50 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"os/signal"
-	"time"
 
-	"github.com/prometheus/client_golang/api"
-	prom "github.com/prometheus/client_golang/api"
-	promv1 "github.com/prometheus/client_golang/api/prometheus/v1"
+	"github.com/prometheus/alertmanager/notify/webhook"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
-func upgradeLoop() {
+var clientset *kubernetes.Clientset
+
+func init() {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	clientset, err = kubernetes.NewForConfig(config)
 	if err != nil {
 		panic(err.Error())
 	}
+}
 
-	promclient, err := api.NewClient(prom.Config{
-		Address: "http://prometheus.mnm.svc:9090",
-	})
+func kill(pod string) (int, error) {
+	p, err := clientset.CoreV1().Pods("").Get(pod, metav1.GetOptions{})
+	if errors.IsNotFound(err) {
+		return http.StatusNotFound, err
+	} else if _, isStatus := err.(*errors.StatusError); isStatus {
+		return http.StatusInternalServerError, err
+	} else if err != nil {
+		return http.StatusInternalServerError, err
+	}
 
+	err = clientset.CoreV1().Pods(p.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
 	if err != nil {
-		panic(err.Error())
+		return http.StatusInternalServerError, err
 	}
 
-	promapi := promv1.NewAPI(promclient)
-
-	for {
-		pods, err := clientset.CoreV1().Pods("platform-prod").List(metav1.ListOptions{LabelSelector: "deploymentconfig=buck-it"})
-		if err != nil {
-			panic(err.Error())
-		}
-
-		fmt.Printf("There are %d pods in with the selector\n", len(pods.Items))
-
-		r := promv1.Range{
-			Start: time.Now().Add(-15 * time.Minute),
-			End:   time.Now(),
-			Step:  time.Minute,
-		}
-
-		result, warnings, err := promapi.QueryRange(context.TODO(), "sum(rate(buckit_count_total[5m]) == 0) by (kubernetes_pod_name)", r)
-		if err != nil {
-			panic(err.Error())
-		}
-
-		if len(warnings) > 0 {
-			fmt.Printf("Warnings: %v\n", warnings)
-		}
-
-		fmt.Printf("Result:\n%v\n", result)
-
-		time.Sleep(5 * time.Second)
-	}
+	return http.StatusOK, nil
 }
 
 func main() {
@@ -76,15 +57,29 @@ func main() {
 		}
 
 		defer r.Body.Close()
-		alert, err := ioutil.ReadAll(r.Body)
+		webhookBody, err := ioutil.ReadAll(r.Body)
 		if err != nil {
 			fmt.Printf("failed to read post body: %v\n", err)
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
 
-		fmt.Printf("Received an alert: %s\n", alert)
-		w.WriteHeader(http.StatusOK)
+		var message webhook.Message
+		err = json.Unmarshal(webhookBody, &message)
+		if err != nil {
+			fmt.Printf("failed to unmarshal json: %v\n", err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+
+		fmt.Printf("Got a request to kill %s", message.CommonLabels["kubernetes_pod_name"])
+
+		code, err := kill(message.CommonLabels["kubernetes_pod_name"])
+		if err != nil {
+			fmt.Printf("failed to kill pod: %v", err)
+		}
+
+		w.WriteHeader(code)
 	})
 
 	srv := http.Server{
