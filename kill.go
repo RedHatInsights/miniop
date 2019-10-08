@@ -52,7 +52,7 @@ func killHandler(w http.ResponseWriter, r *http.Request) {
 
 	code, err := kill(message.CommonLabels["kubernetes_pod_name"])
 	if err != nil {
-		fmt.Printf("failed to kill pod: %v", err)
+		fmt.Printf("failed to kill pod: %v\n", err)
 	}
 
 	w.WriteHeader(code)
