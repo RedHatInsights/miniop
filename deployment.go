@@ -9,7 +9,7 @@ import (
 )
 
 func getCanaryDeployments() {
-	client, err := appsv1.NewForConfig(client.Config)
+	client, err := appsv1.NewForConfig(client.GetConfig())
 	if err != nil {
 		panic(err.Error())
 	}

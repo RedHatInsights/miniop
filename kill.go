@@ -7,13 +7,14 @@ import (
 	"net/http"
 
 	"github.com/prometheus/alertmanager/notify/webhook"
+	"github.com/redhatinsights/miniop/client"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"github.com/redhatinsights/miniop/client"
 )
 
 func kill(pod string) (int, error) {
-	p, err := client.Clientset.CoreV1().Pods("").Get(pod, metav1.GetOptions{})
+	clientset := client.GetClientset()
+	p, err := clientset.CoreV1().Pods("").Get(pod, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return http.StatusNotFound, err
 	} else if _, isStatus := err.(*errors.StatusError); isStatus {
@@ -22,7 +23,7 @@ func kill(pod string) (int, error) {
 		return http.StatusInternalServerError, err
 	}
 
-	err = client.Clientset.CoreV1().Pods(p.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
+	err = clientset.CoreV1().Pods(p.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
