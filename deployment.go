@@ -82,7 +82,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 		Spec:       podTemplateSpec.Spec,
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 	}
-	fmt.Printf("attempting to create this pod: %v\n", podDef)
+	fmt.Printf("attempting to create this pod: %+v\n", podDef)
 
 	pod, err := clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
 	if err != nil {
