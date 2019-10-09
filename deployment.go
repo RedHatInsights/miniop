@@ -120,6 +120,9 @@ func upgradeDeployments() {
 		deadline := pod.GetCreationTimestamp().Add(15 * time.Minute)
 		if time.Now().After(deadline) {
 			fmt.Printf("canary pod %s for deployment %s is old enough, upgrading the deployment...\n", pod.GetName(), canaryFor)
+			return
 		}
+
+		fmt.Printf("canary pod %s for deployment %s is not old enough, letting it ripen...\n", pod.GetName(), canaryFor)
 	}
 }
