@@ -16,6 +16,10 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+func init() {
+	l.InitLogger()
+}
+
 var killCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 	Name: "pod_killer_total",
 	Help: "A count of pods killed per deployment",

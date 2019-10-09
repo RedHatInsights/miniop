@@ -15,6 +15,10 @@ import (
 	"go.uber.org/zap"
 )
 
+func init() {
+	l.InitLogger()
+}
+
 func main() {
 
 	r := chi.NewRouter()
