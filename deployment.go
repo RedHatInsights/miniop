@@ -12,12 +12,11 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
+var clientset = client.GetClientset()
+
 func getCanaryDeployments() {
-	cl, err := appsv1.NewForConfig(client.GetConfig())
-	if err != nil {
-		panic(err.Error())
-	}
-	dcs, err := cl.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
+	dcs, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})
 	if err != nil {
@@ -41,13 +40,12 @@ func getCanaryDeployments() {
 			continue
 		}
 		dc.Annotations["canary-pod"] = podName
-		cl.DeploymentConfigs(client.GetNamespace()).Update(&dc)
+		deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(&dc)
 	}
 }
 
 func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	podTemplateSpec := dc.Spec.Template.DeepCopy()
-	clientset := client.GetClientset()
 
 	name, ok := dc.Annotations["canary-name"]
 	if !ok {
@@ -85,7 +83,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	delete(om.Labels, "deploymentconfig")
 	om.Labels["canary"] = "true"
 	om.Labels["canary-for"] = dc.GetName()
-	om.SetGenerateName(fmt.Sprintf("%s-canary", dc.GetName()))
+	om.SetGenerateName(fmt.Sprintf("%s-canary-", dc.GetName()))
 
 	podDef := &apiv1.Pod{
 		Spec:       podTemplateSpec.Spec,
@@ -113,16 +111,49 @@ func upgradeDeployments() {
 		return
 	}
 	for _, pod := range pods.Items {
-		canaryFor, ok := pod.Labels["canary-for"]
+		_, ok := pod.Labels["canary-for"]
 		if !ok {
 			continue
 		}
-		deadline := pod.GetCreationTimestamp().Add(15 * time.Minute)
-		if time.Now().After(deadline) {
-			fmt.Printf("canary pod %s for deployment %s is old enough, upgrading the deployment...\n", pod.GetName(), canaryFor)
-			return
-		}
-
-		fmt.Printf("canary pod %s for deployment %s is not old enough, letting it ripen...\n", pod.GetName(), canaryFor)
+		doUpgrade(&pod)
 	}
+}
+
+func updateContainer(dc *v1.DeploymentConfig) bool {
+	for idx, container := range dc.Spec.Template.Spec.Containers {
+		if container.Name == dc.Annotations["canary-name"] {
+			dc.Spec.Template.Spec.Containers[idx].Image = dc.Annotations["canary-image"]
+			return true
+		}
+	}
+	return false
+}
+
+func doUpgrade(pod *apiv1.Pod) {
+	deadline := pod.GetCreationTimestamp().Add(15 * time.Minute)
+	canaryFor := pod.Labels["canary-for"]
+	if !time.Now().After(deadline) {
+		fmt.Printf("canary pod %s for deployment %s is not old enough, letting it ripen...\n", pod.GetName(), canaryFor)
+		return
+	}
+	fmt.Printf("canary pod %s for deployment %s is old enough, upgrading the deployment...\n", pod.GetName(), canaryFor)
+	dc, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
+	if err != nil {
+		fmt.Printf("failed to fetch deployment: %v\n", err)
+		return
+	}
+	if ok := updateContainer(dc); !ok {
+		fmt.Printf("failed to update image in container specs\n")
+		return
+	}
+
+	fmt.Printf("updated deployment, deleting canary pod")
+	if err := clientset.CoreV1().Pods(client.GetNamespace()).Delete(pod.GetName(), &metav1.DeleteOptions{}); err != nil {
+		fmt.Printf("failed to delete pod, not updating deployment: %v\n", err)
+		return
+	}
+
+	fmt.Printf("pushing updated deployment")
+	delete(dc.Annotations, "canary-pod")
+	deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 }
