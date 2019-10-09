@@ -7,14 +7,12 @@ Canary Keeper is an _operator-like_ service that performs two functions.
 
 ## Canary Deployments
 
-It depends on two non-trivial services to function:
-
-1. prometheus/alertmanager
-2. quay.io
+*This system expects deployments to have SLOs and SLIs tracked via prometheus
+and alertmanager.*
 
 To have Canary Keeper manage a deployment you must annotate the deployment with
-a label indicating that it should be managedd and two annotations that contain the
-pullspec for a quay repo that you wish to test and the container name for that image.
+a label indicating that it should be managed and two annotations that contain the
+pullspec for an image that you wish to test and the container name for that image.
 
 Something kind of like this:
 
@@ -27,7 +25,7 @@ metadata:
         app: myapp
         canary: "true"
     annotations:
-        canary-image: quay.io/myorg/my_repo:latest
+        canary-image: quay.io/myorg/my_repo@sha256:...
         canary-name: myapp
 spec:
     template:
@@ -41,10 +39,12 @@ Canary Keeper will compare the image in the podspec with the image referred to
 in the `canary` label.  If they are the same, it does nothing and checks back
 later, otherwise it executes the canary deployment.
 
-The strategy for the deployment is to deploy a new pod that is a clone of the podspec in the managed deployment with two changes.
+The strategy for the deployment is to deploy a new pod that is a clone of the
+podspec in the managed deployment with two changes.
 
 1. The container image is the one from the `canary` label.
-2. Labels that refer to a deploymentconfig are removed, so that the new pod will not be managed by the deploymentconfig itself.
+2. Labels that refer to a deploymentconfig are removed, so that the new pod
+will not be managed by the deploymentconfig itself.
 
 At this point the pod should share production traffic with the existing
 deployment.  This is where the prometheus/alertmanager dependency comes into
@@ -52,9 +52,13 @@ play.
 
 Canary Keeper should recieve alerts from alertmanager that reflect SLI breaches
 for the managed service.  If the canary receives any alerts then it will be
-deemed unfit and the canary will be canceled.  If no such alerts are detected
-after the incubation period (15min default) then the managed deployment podspec
-will be patched with the new image and the canary terminated.
+deemed unfit and the canary will be canceled. This will be tracked with
+another label on the deploymentconfig that will have to be cleared to try
+again.
+
+If no alerts are detected after the incubation period (15min default)
+then the managed deployment podspec will be patched with the new image and
+the canary terminated.
 
 ## Pod Killing
 

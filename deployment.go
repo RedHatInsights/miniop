@@ -102,7 +102,6 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 }
 
 func upgradeDeployments() {
-	clientset := client.GetClientset()
 	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})
