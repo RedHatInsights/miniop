@@ -66,7 +66,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	}
 
 	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
-		LabelSelector: fmt.Sprintf("canary=%s", podTemplateSpec.Name),
+		LabelSelector: fmt.Sprintf("canary=%s", dc.GetName()),
 	})
 	if err != nil {
 		return "", fmt.Errorf("Failed to search for pods: %v", err)
@@ -79,12 +79,15 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	pretty, _ := json.MarshalIndent(dc, "", "  ")
 	fmt.Printf("incoming dc is:\n%s\n", pretty)
 
-	delete(podTemplateSpec.ObjectMeta.Labels, "deploymentconfig")
-	podTemplateSpec.ObjectMeta.Labels["canary"] = podTemplateSpec.Name
+	om := podTemplateSpec.ObjectMeta
+
+	delete(om.Labels, "deploymentconfig")
+	om.Labels["canary"] = dc.GetName()
+	om.SetGenerateName(fmt.Sprintf("%s-canary", dc.GetName()))
 
 	podDef := &apiv1.Pod{
 		Spec:       podTemplateSpec.Spec,
-		ObjectMeta: podTemplateSpec.ObjectMeta,
+		ObjectMeta: om,
 	}
 
 	pretty, _ = json.MarshalIndent(podDef, "", "  ")
