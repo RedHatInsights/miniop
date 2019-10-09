@@ -76,8 +76,8 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 		return "", fmt.Errorf("A canary for this (%s) deployment already exists", podTemplateSpec.Name)
 	}
 
-	pretty, _ := json.MarshalIndent(podTemplateSpec, "", "  ")
-	fmt.Printf("incoming pod template spec is:\n%s\n", pretty)
+	pretty, _ := json.MarshalIndent(dc, "", "  ")
+	fmt.Printf("incoming dc is:\n%s\n", pretty)
 
 	delete(podTemplateSpec.ObjectMeta.Labels, "deploymentconfig")
 	podTemplateSpec.ObjectMeta.Labels["canary"] = podTemplateSpec.Name
