@@ -11,6 +11,8 @@ require (
 	github.com/openshift/client-go v3.9.0+incompatible
 	github.com/prometheus/alertmanager v0.19.0
 	github.com/prometheus/client_golang v1.1.0
+	github.com/spf13/viper v1.4.0
+	go.uber.org/zap v1.10.0
 	golang.org/x/crypto v0.0.0-20191002192127-34f69633bfdc // indirect
 	golang.org/x/net v0.0.0-20191003171128-d98b1b443823 // indirect
 	golang.org/x/time v0.0.0-20190921001708-c4c64cad1fd0 // indirect

@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +11,8 @@ import (
 	"github.com/go-chi/chi/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redhatinsights/miniop/kill"
+	l "github.com/redhatinsights/miniop/logger"
+	"go.uber.org/zap"
 )
 
 func main() {
@@ -33,7 +34,7 @@ func main() {
 		<-sigint
 
 		if err := srv.Shutdown(context.Background()); err != nil {
-			fmt.Printf("HTTP Server Shutdown Error: %v\n", err)
+			l.Log.Error("HTTP Server Shutdown Error", zap.Error(err))
 		}
 		close(idleConnsClosed)
 	}()
@@ -63,10 +64,9 @@ func main() {
 		}
 	}(idleConnsClosed)
 
-	fmt.Println("Starting web server")
+	l.Log.Info("starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
-		fmt.Printf("HTTP Server Failed to start: %v\n", err)
-		panic(err.Error())
+		l.Log.Panic("HTTP server failed to start", zap.Error(err))
 	}
 
 	<-idleConnsClosed

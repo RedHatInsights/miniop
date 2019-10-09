@@ -10,6 +10,8 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/miniop/client"
+	l "github.com/redhatinsights/miniop/logger"
+	"go.uber.org/zap"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -41,7 +43,7 @@ func kill(pod string) (int, error) {
 func Handler(w http.ResponseWriter, r *http.Request) {
 	webhookBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
-		fmt.Printf("failed to read post body: %v\n", err)
+		l.Log.Error("failed to read post body", zap.Error(err))
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
@@ -50,16 +52,18 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	var message webhook.Message
 	err = json.Unmarshal(webhookBody, &message)
 	if err != nil {
-		fmt.Printf("failed to unmarshal json: %v\n", err)
+		l.Log.Error("failed to unmarshal json", zap.Error(err))
 		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
 
-	fmt.Printf("Got a request to kill %s\n", message.CommonLabels["kubernetes_pod_name"])
+	podname := message.CommonLabels["kubernetes_pod_name"]
 
-	code, err := kill(message.CommonLabels["kubernetes_pod_name"])
+	l.Log.Info(fmt.Sprintf("got a request to kill %s", podname), zap.String("pod", podname))
+
+	code, err := kill(podname)
 	if err != nil {
-		fmt.Printf("failed to kill pod: %v\n", err)
+		l.Log.Error(fmt.Sprintf("failed to kill pod %s", podname), zap.Error(err))
 	}
 	w.WriteHeader(code)
 }
