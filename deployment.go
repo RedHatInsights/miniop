@@ -153,7 +153,7 @@ func doUpgrade(pod *apiv1.Pod) {
 		return
 	}
 
-	fmt.Printf("pushing updated deployment")
+	fmt.Printf("pushing updated deployment\n")
 	delete(dc.Annotations, "canary-pod")
 	deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 }
