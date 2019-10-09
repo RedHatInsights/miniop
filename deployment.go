@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 
 	v1 "github.com/openshift/api/apps/v1"
@@ -82,7 +83,9 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 		Spec:       podTemplateSpec.Spec,
 		ObjectMeta: podTemplateSpec.ObjectMeta,
 	}
-	fmt.Printf("attempting to create this pod: %+v\n", podDef)
+
+	pretty, _ := json.MarshalIndent(podDef, "", "  ")
+	fmt.Printf("attempting to create this pod:\n%s\n", pretty)
 
 	pod, err := clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
 	if err != nil {
