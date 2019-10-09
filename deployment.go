@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 
 	v1 "github.com/openshift/api/apps/v1"
 	appsv1 "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
@@ -73,7 +74,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	}
 
 	if len(pods.Items) > 0 {
-		return "", fmt.Errorf("A canary for this (%s) deployment already exists", podTemplateSpec.Name)
+		return "", fmt.Errorf("A canary for this (%s) deployment already exists", dc.GetName())
 	}
 
 	pretty, _ := json.MarshalIndent(dc, "", "  ")
@@ -82,7 +83,8 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	om := podTemplateSpec.ObjectMeta
 
 	delete(om.Labels, "deploymentconfig")
-	om.Labels["canary"] = dc.GetName()
+	om.Labels["canary"] = "true"
+	om.Labels["canary-for"] = dc.GetName()
 	om.SetGenerateName(fmt.Sprintf("%s-canary", dc.GetName()))
 
 	podDef := &apiv1.Pod{
@@ -99,4 +101,25 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	}
 
 	return pod.Name, nil
+}
+
+func upgradeDeployments() {
+	clientset := client.GetClientset()
+	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
+		LabelSelector: "canary=true",
+	})
+	if err != nil {
+		fmt.Printf("failed to select pods: %v\n", err)
+		return
+	}
+	for _, pod := range pods.Items {
+		canaryFor, ok := pod.Labels["canary-for"]
+		if !ok {
+			continue
+		}
+		deadline := pod.GetCreationTimestamp().Add(15 * time.Minute)
+		if time.Now().After(deadline) {
+			fmt.Printf("canary pod %s for deployment %s is old enough, upgrading the deployment...\n", pod.GetName(), canaryFor)
+		}
+	}
 }

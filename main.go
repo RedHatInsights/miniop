@@ -11,13 +11,14 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redhatinsights/miniop/kill"
 )
 
 func main() {
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
-	r.Post("/kill", killHandler)
+	r.Post("/kill", kill.Handler)
 	r.Handle("/metrics", promhttp.Handler())
 
 	srv := http.Server{
@@ -45,6 +46,18 @@ func main() {
 				return
 			default:
 				getCanaryDeployments()
+				time.Sleep(2 * time.Minute)
+			}
+		}
+	}(idleConnsClosed)
+
+	go func(done chan struct{}) {
+		for {
+			select {
+			case <-done:
+				return
+			default:
+				upgradeDeployments()
 				time.Sleep(2 * time.Minute)
 			}
 		}

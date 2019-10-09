@@ -1,4 +1,4 @@
-package main
+package kill
 
 import (
 	"encoding/json"
@@ -7,10 +7,17 @@ import (
 	"net/http"
 
 	"github.com/prometheus/alertmanager/notify/webhook"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/redhatinsights/miniop/client"
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+var killCounter = promauto.NewCounterVec(prometheus.CounterOpts{
+	Name: "pod_killer_total",
+	Help: "A count of pods killed per deployment",
+}, []string{"deployment"})
 
 func kill(pod string) (int, error) {
 	clientset := client.GetClientset()
@@ -27,11 +34,11 @@ func kill(pod string) (int, error) {
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}
-
+	killCounter.With(prometheus.Labels{"deployment": p.Labels["app"]}).Inc()
 	return http.StatusOK, nil
 }
 
-func killHandler(w http.ResponseWriter, r *http.Request) {
+func Handler(w http.ResponseWriter, r *http.Request) {
 	webhookBody, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		fmt.Printf("failed to read post body: %v\n", err)
@@ -54,6 +61,5 @@ func killHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Printf("failed to kill pod: %v\n", err)
 	}
-
 	w.WriteHeader(code)
 }
