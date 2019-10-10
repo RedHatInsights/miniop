@@ -1,4 +1,4 @@
-package main
+package deployment
 
 import (
 	"fmt"
@@ -16,6 +16,10 @@ import (
 var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
 var clientset = client.GetClientset()
 
+func init() {
+	l.InitLogger()
+}
+
 // NothingToDo is returned as an error if a deployment is up to date
 type NothingToDo struct{}
 
@@ -23,10 +27,11 @@ func (e *NothingToDo) Error() string {
 	return fmt.Sprintf("nothing to do")
 }
 
-func getCanaryDeployments() {
+func GetCanaryDeployments() {
 	dcs, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})
+
 	if err != nil {
 		l.Log.Error("failed to fetch deploymentconfigs", zap.Error(err))
 		return
@@ -150,7 +155,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	return pod.Name, nil
 }
 
-func monitorCanaries() {
+func MonitorCanaries() {
 	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
 	})

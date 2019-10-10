@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redhatinsights/miniop/deployment"
 	"github.com/redhatinsights/miniop/kill"
 	l "github.com/redhatinsights/miniop/logger"
 	"go.uber.org/zap"
@@ -50,7 +51,7 @@ func main() {
 			case <-done:
 				return
 			default:
-				getCanaryDeployments()
+				deployment.GetCanaryDeployments()
 				time.Sleep(2 * time.Minute)
 			}
 		}
@@ -62,11 +63,13 @@ func main() {
 			case <-done:
 				return
 			default:
-				monitorCanaries()
+				deployment.MonitorCanaries()
 				time.Sleep(2 * time.Minute)
 			}
 		}
 	}(idleConnsClosed)
+
+	go deployment.Loop()
 
 	l.Log.Info("starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
