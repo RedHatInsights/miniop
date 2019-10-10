@@ -62,7 +62,7 @@ func main() {
 			case <-done:
 				return
 			default:
-				upgradeDeployments()
+				monitorCanaries()
 				time.Sleep(2 * time.Minute)
 			}
 		}
