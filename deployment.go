@@ -128,6 +128,9 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	if !ok {
 		duration = "15m"
 	}
+	if om.Annotations == nil {
+		om.Annotations = make(map[string]string)
+	}
 	om.Annotations["canary-duration"] = duration
 
 	om.SetGenerateName(fmt.Sprintf("%s-canary-", dc.GetName()))
