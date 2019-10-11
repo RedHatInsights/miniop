@@ -27,43 +27,28 @@ func (e *NothingToDo) Error() string {
 	return fmt.Sprintf("nothing to do")
 }
 
-func GetCanaryDeployments() {
-	dcs, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).List(metav1.ListOptions{
-		LabelSelector: "canary=true",
-	})
-
-	if err != nil {
-		l.Log.Error("failed to fetch deploymentconfigs", zap.Error(err))
-		return
-	}
-	if len(dcs.Items) == 0 {
-		l.Log.Debug("0 deployment configs to be managed")
+func checkDeploymentConfig(dc v1.DeploymentConfig) {
+	_, ok := dc.Annotations["canary-pod"]
+	if ok {
+		l.Log.Debug(fmt.Sprintf("a canary pod for %s already exists", dc.Name), zap.String("deploymentconfig", dc.Name))
 		return
 	}
 
-	for _, dc := range dcs.Items {
-		_, ok := dc.Annotations["canary-pod"]
-		if ok {
-			l.Log.Debug(fmt.Sprintf("a canary pod for %s already exists", dc.Name), zap.String("deploymentconfig", dc.Name))
-			continue
-		}
+	failedImage, ok := dc.Annotations["canary-fail"]
+	if ok {
+		l.Log.Debug("a canary deployment has failed for this deploymentconfig, clear the annotations and try again",
+			zap.String("deploymentconfig", dc.GetName()), zap.String("failed", failedImage))
+		return
+	}
 
-		failedImage, ok := dc.Annotations["canary-fail"]
-		if ok {
-			l.Log.Debug("a canary deployment has failed for this deploymentconfig, clear the annotations and try again",
-				zap.String("deploymentconfig", dc.GetName()), zap.String("failed", failedImage))
-			return
-		}
-
-		podName, err := spawnCanary(dc)
-		if err == nil {
-			dc.Annotations["canary-pod"] = podName
-			deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(&dc)
-		} else if err, ok := err.(*NothingToDo); ok {
-			l.Log.Debug("deploymentconfig appears to be up to date", zap.String("deploymentconfig", dc.GetName()))
-		} else {
-			l.Log.Error("failed to spawn canary", zap.Error(err))
-		}
+	podName, err := spawnCanary(dc)
+	if err == nil {
+		dc.Annotations["canary-pod"] = podName
+		deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(&dc)
+	} else if err, ok := err.(*NothingToDo); ok {
+		l.Log.Debug("deploymentconfig appears to be up to date", zap.String("deploymentconfig", dc.GetName()))
+	} else {
+		l.Log.Error("failed to spawn canary", zap.Error(err))
 	}
 }
 

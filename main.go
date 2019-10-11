@@ -44,19 +44,6 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	// start deployment scanner
-	go func(done chan struct{}) {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				deployment.GetCanaryDeployments()
-				time.Sleep(2 * time.Minute)
-			}
-		}
-	}(idleConnsClosed)
-
 	go func(done chan struct{}) {
 		for {
 			select {
