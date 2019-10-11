@@ -190,6 +190,7 @@ func check(pod *apiv1.Pod) {
 
 		if status.RestartCount > 0 {
 			dc.Annotations["canary-fail"] = status.Image
+			delete(dc.Annotations, "canary-pod")
 			deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 
 			l.Log.Info("canary image had container restarts, marking as failed",
