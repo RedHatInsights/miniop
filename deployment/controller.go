@@ -24,7 +24,6 @@ import (
 	"github.com/redhatinsights/miniop/client"
 	l "github.com/redhatinsights/miniop/logger"
 	"go.uber.org/zap"
-	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -118,7 +117,7 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 
 	// Let the workers stop when we are done
 	defer c.queue.ShutDown()
-	l.Log.Info("Starting Pod controller")
+	l.Log.Info("Starting DeploymentConfig controller")
 
 	go c.informer.Run(stopCh)
 
@@ -133,7 +132,7 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 	}
 
 	<-stopCh
-	l.Log.Info("Stopping Pod controller")
+	l.Log.Info("Stopping DeploymentConfig controller")
 }
 
 func (c *Controller) runWorker() {
@@ -159,7 +158,7 @@ func Loop() {
 	// whenever the cache is updated, the pod key is added to the workqueue.
 	// Note that when we finally process the item from the workqueue, we might see a newer version
 	// of the Pod than the version which was responsible for triggering the update.
-	indexer, informer := cache.NewIndexerInformer(dcListerWatcher, &v1.Pod{}, 0, cache.ResourceEventHandlerFuncs{
+	indexer, informer := cache.NewIndexerInformer(dcListerWatcher, &appsv1.DeploymentConfig{}, 0, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {
