@@ -51,7 +51,7 @@ func main() {
 				return
 			default:
 				deployment.MonitorCanaries()
-				time.Sleep(2 * time.Minute)
+				time.Sleep(1 * time.Minute)
 			}
 		}
 	}(idleConnsClosed)
