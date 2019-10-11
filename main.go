@@ -13,6 +13,7 @@ import (
 	"github.com/redhatinsights/miniop/deployment"
 	"github.com/redhatinsights/miniop/kill"
 	l "github.com/redhatinsights/miniop/logger"
+	"github.com/redhatinsights/miniop/pod"
 	"go.uber.org/zap"
 )
 
@@ -50,7 +51,7 @@ func main() {
 			case <-done:
 				return
 			default:
-				deployment.MonitorCanaries()
+				pod.MonitorCanaries()
 				time.Sleep(1 * time.Minute)
 			}
 		}
