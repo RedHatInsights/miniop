@@ -80,7 +80,7 @@ func (c *Controller) syncToStdout(key string) error {
 		// Note that you also have to check the uid if you have a local controlled resource, which
 		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
 		// fmt.Printf("Sync/Add/Update for Pod %s\n", obj.(*v1.Pod).GetName())
-		l.Log.Info("sync/add/update for deploymentconfig", zap.Reflect("deploymentconfig", obj))
+		l.Log.Info("sync/add/update for deploymentconfig", zap.Reflect("deploymentconfig", key))
 		checkDeploymentConfig(obj.(*appsv1.DeploymentConfig))
 	}
 	return nil

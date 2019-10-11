@@ -197,8 +197,8 @@ func check(pod *apiv1.Pod) {
 
 			if err := deletePod(pod); err != nil {
 				l.Log.Error("failed to delete stale canary pod", zap.Error(err))
-				return
 			}
+			return
 		}
 	}
 
