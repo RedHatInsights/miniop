@@ -27,7 +27,7 @@ func (e *NothingToDo) Error() string {
 	return fmt.Sprintf("nothing to do")
 }
 
-func checkDeploymentConfig(dc v1.DeploymentConfig) {
+func checkDeploymentConfig(dc *v1.DeploymentConfig) {
 	_, ok := dc.Annotations["canary-pod"]
 	if ok {
 		l.Log.Debug(fmt.Sprintf("a canary pod for %s already exists", dc.Name), zap.String("deploymentconfig", dc.Name))
@@ -41,10 +41,10 @@ func checkDeploymentConfig(dc v1.DeploymentConfig) {
 		return
 	}
 
-	podName, err := spawnCanary(dc)
+	podName, err := spawnCanary(*dc)
 	if err == nil {
 		dc.Annotations["canary-pod"] = podName
-		deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(&dc)
+		deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 	} else if err, ok := err.(*NothingToDo); ok {
 		l.Log.Debug("deploymentconfig appears to be up to date", zap.String("deploymentconfig", dc.GetName()))
 	} else {
