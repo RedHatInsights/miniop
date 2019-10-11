@@ -16,6 +16,10 @@ import (
 var clientset = client.GetClientset()
 var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
 
+func init() {
+	l.InitLogger()
+}
+
 func MonitorCanaries() {
 	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: "canary=true",
@@ -48,7 +52,7 @@ func getNameAndImage(dc v1.DeploymentConfig) (string, string, error) {
 func check(pod *apiv1.Pod) {
 	canaryFor, ok := pod.Labels["canary-for"]
 	if !ok {
-		l.Log.Error("canary pod does not have a canary-for label", zap.String("pod", pod.GetName()))
+		l.Log.Debug("canary pod does not have a canary-for label", zap.String("pod", pod.GetName()))
 		return
 	}
 
@@ -60,7 +64,7 @@ func check(pod *apiv1.Pod) {
 
 	name, image, err := getNameAndImage(*dc)
 	if err != nil {
-		l.Log.Error("failed to get canary details from dc", zap.Error(err))
+		l.Log.Info("failed to get canary details from dc", zap.Error(err))
 		return
 	}
 
@@ -77,7 +81,6 @@ func check(pod *apiv1.Pod) {
 			}
 			l.Log.Info("canary image didn't match desired image from dc, deleted",
 				zap.String("deploymentconfig", canaryFor), zap.String("desired", image), zap.String("canary", status.Image))
-
 		}
 
 		if status.RestartCount > 0 {
@@ -107,11 +110,11 @@ func check(pod *apiv1.Pod) {
 
 	deadline := pod.GetCreationTimestamp().Add(duration)
 	if !time.Now().After(deadline) {
-		l.Log.Debug(fmt.Sprintf("canary pod %s for deployment %s is not old enough, letting it ripen...", pod.GetName(), canaryFor))
+		l.Log.Debug(fmt.Sprintf("canary pod %s for deployment %s is not old enough, letting it ripen...", pod.GetName(), canaryFor), zap.String("deploymentconfig", canaryFor))
 		return
 	}
 
-	l.Log.Info(fmt.Sprintf("canary pod %s for deployment %s is old enough, upgrading the deployment...", pod.GetName(), canaryFor))
+	l.Log.Info(fmt.Sprintf("canary pod %s for deployment %s is old enough, upgrading the deployment...", pod.GetName(), canaryFor), zap.String("deploymentconfig", canaryFor))
 	upgrade(pod, canaryFor)
 }
 
@@ -133,6 +136,7 @@ func upgrade(pod *apiv1.Pod, canaryFor string) {
 
 	delete(dc.Annotations, "canary-pod")
 	deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+	l.Log.Info(fmt.Sprintf("canary for %s completed, upgrading", canaryFor), zap.String("deploymentconfig", canaryFor))
 }
 
 func updateContainer(dc *v1.DeploymentConfig) bool {

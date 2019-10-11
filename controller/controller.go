@@ -22,6 +22,7 @@ import (
 
 	l "github.com/redhatinsights/miniop/logger"
 	"go.uber.org/zap"
+	r "k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/tools/cache"
@@ -79,6 +80,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	l.Log.Info(fmt.Sprintf("Dropping pod %q out of the queue", key), zap.Error(err))
 }
 
+// Run comment
 func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 	defer runtime.HandleCrash()
 
@@ -105,4 +107,52 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 func (c *Controller) runWorker() {
 	for c.processNextItem() {
 	}
+}
+
+// Start comment
+func Start(lw cache.ListerWatcher, objType r.Object, worker func(*Controller, string) error) {
+	// create the workqueue
+	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
+
+	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
+	// whenever the cache is updated, the pod key is added to the workqueue.
+	// Note that when we finally process the item from the workqueue, we might see a newer version
+	// of the Pod than the version which was responsible for triggering the update.
+	indexer, informer := cache.NewIndexerInformer(lw, objType, 0, cache.ResourceEventHandlerFuncs{
+		AddFunc: func(obj interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		UpdateFunc: func(old interface{}, new interface{}) {
+			key, err := cache.MetaNamespaceKeyFunc(new)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+		DeleteFunc: func(obj interface{}) {
+			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
+			// key function.
+			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
+			if err == nil {
+				queue.Add(key)
+			}
+		},
+	}, cache.Indexers{})
+
+	controller := &Controller{
+		Indexer:  indexer,
+		Queue:    queue,
+		Informer: informer,
+		Worker:   worker,
+	}
+
+	// Now let's start the controller
+	stop := make(chan struct{})
+	defer close(stop)
+	go controller.Run(1, stop)
+
+	// Wait forever
+	select {}
 }

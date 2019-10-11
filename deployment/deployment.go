@@ -12,7 +12,6 @@ import (
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/client-go/util/workqueue"
 )
 
 var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
@@ -40,7 +39,8 @@ func worker(c *ctl.Controller, key string) error {
 	return nil
 }
 
-func Loop() {
+// Start executes the watch loop
+func Start() {
 
 	dcListerWatcher := cache.NewFilteredListWatchFromClient(
 		deploymentsClient.RESTClient(),
@@ -51,50 +51,7 @@ func Loop() {
 		},
 	)
 
-	// create the workqueue
-	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
-
-	// Bind the workqueue to a cache with the help of an informer. This way we make sure that
-	// whenever the cache is updated, the pod key is added to the workqueue.
-	// Note that when we finally process the item from the workqueue, we might see a newer version
-	// of the Pod than the version which was responsible for triggering the update.
-	indexer, informer := cache.NewIndexerInformer(dcListerWatcher, &v1.DeploymentConfig{}, 0, cache.ResourceEventHandlerFuncs{
-		AddFunc: func(obj interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(obj)
-			if err == nil {
-				queue.Add(key)
-			}
-		},
-		UpdateFunc: func(old interface{}, new interface{}) {
-			key, err := cache.MetaNamespaceKeyFunc(new)
-			if err == nil {
-				queue.Add(key)
-			}
-		},
-		DeleteFunc: func(obj interface{}) {
-			// IndexerInformer uses a delta queue, therefore for deletes we have to use this
-			// key function.
-			key, err := cache.DeletionHandlingMetaNamespaceKeyFunc(obj)
-			if err == nil {
-				queue.Add(key)
-			}
-		},
-	}, cache.Indexers{})
-
-	controller := &ctl.Controller{
-		Indexer:  indexer,
-		Queue:    queue,
-		Informer: informer,
-		Worker:   worker,
-	}
-
-	// Now let's start the controller
-	stop := make(chan struct{})
-	defer close(stop)
-	go controller.Run(1, stop)
-
-	// Wait forever
-	select {}
+	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, worker)
 }
 
 // NothingToDo is returned as an error if a deployment is up to date
@@ -207,7 +164,8 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 		ObjectMeta: om,
 	}
 
-	l.Log.Debug("creating pod", zap.Reflect("pod", podDef))
+	l.Log.Info("creating canary pod", zap.String("deploymentconfig", dc.GetName()))
+	l.Log.Debug("pod definition", zap.Reflect("pod", podDef))
 
 	pod, err := clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
 	if err != nil {
