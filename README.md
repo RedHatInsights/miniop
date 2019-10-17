@@ -6,7 +6,7 @@ Canary Keeper is an _operator-like_ service that performs two functions.
 2. Kills pods that have stopped working
 
 The service relies on a system like prometheus and alertmanager to indicate a
-_working_ for a deployment.
+_working_ deployment.
 
 ## Canary Deployments
 
