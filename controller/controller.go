@@ -29,11 +29,15 @@ import (
 	"k8s.io/client-go/util/workqueue"
 )
 
+type Worker interface {
+	Work(*Controller, string) error
+}
+
 type Controller struct {
 	Indexer  cache.Indexer
 	Queue    workqueue.RateLimitingInterface
 	Informer cache.Controller
-	Worker   func(*Controller, string) error
+	Worker   Worker
 }
 
 func (c *Controller) processNextItem() bool {
@@ -48,7 +52,7 @@ func (c *Controller) processNextItem() bool {
 	defer c.Queue.Done(key)
 
 	// Invoke the method containing the business logic
-	err := c.Worker(c, key.(string))
+	err := c.Worker.Work(c, key.(string))
 	// Handle the error if something went wrong during the execution of the business logic
 	c.handleErr(err, key)
 	return true
@@ -110,7 +114,7 @@ func (c *Controller) runWorker() {
 }
 
 // Start comment
-func Start(lw cache.ListerWatcher, objType r.Object, worker func(*Controller, string) error) {
+func Start(lw cache.ListerWatcher, objType r.Object, worker Worker) {
 	// create the workqueue
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 

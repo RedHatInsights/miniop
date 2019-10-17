@@ -57,7 +57,9 @@ func main() {
 		}
 	}(idleConnsClosed)
 
-	go deployment.Start()
+	deploymentWorker := deployment.NewDeploymentWorker()
+
+	go deploymentWorker.Start()
 
 	l.Log.Info("starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {

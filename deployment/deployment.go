@@ -1,6 +1,7 @@
 package deployment
 
 import (
+	"errors"
 	"fmt"
 
 	v1 "github.com/openshift/api/apps/v1"
@@ -11,17 +12,27 @@ import (
 	"go.uber.org/zap"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
 )
-
-var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
-var clientset = client.GetClientset()
 
 func init() {
 	l.InitLogger()
 }
 
-func worker(c *ctl.Controller, key string) error {
+type DeploymentWorker struct {
+	deploymentsClient *appsv1.AppsV1Client
+	clientset         *kubernetes.Clientset
+}
+
+func NewDeploymentWorker() *DeploymentWorker {
+	return &DeploymentWorker{
+		deploymentsClient: appsv1.NewForConfigOrDie(client.GetConfig()),
+		clientset:         client.GetClientset(),
+	}
+}
+
+func (d *DeploymentWorker) Work(c *ctl.Controller, key string) error {
 	obj, exists, err := c.Indexer.GetByKey(key)
 	if err != nil {
 		l.Log.Error(fmt.Sprintf("Fetching object with key %s from store failed with %v", key, err), zap.Error(err))
@@ -34,16 +45,16 @@ func worker(c *ctl.Controller, key string) error {
 	} else {
 		// Note that you also have to check the uid if you have a local controlled resource, which
 		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
-		checkDeploymentConfig(obj.(*v1.DeploymentConfig))
+		d.checkDeploymentConfig(obj.(*v1.DeploymentConfig))
 	}
 	return nil
 }
 
 // Start executes the watch loop
-func Start() {
+func (d *DeploymentWorker) Start() {
 
 	dcListerWatcher := cache.NewFilteredListWatchFromClient(
-		deploymentsClient.RESTClient(),
+		d.deploymentsClient.RESTClient(),
 		"deploymentconfigs",
 		client.GetNamespace(),
 		func(opts *metav1.ListOptions) {
@@ -51,35 +62,59 @@ func Start() {
 		},
 	)
 
-	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, worker)
+	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, d)
 }
 
 // NothingToDo is returned as an error if a deployment is up to date
-type NothingToDo struct{}
+var NothingToDo = errors.New("nothing to do")
 
-func (e *NothingToDo) Error() string {
-	return fmt.Sprintf("nothing to do")
-}
-
-func checkDeploymentConfig(dc *v1.DeploymentConfig) {
+func shouldSpawn(dc *v1.DeploymentConfig) ([]apiv1.Container, error) {
 	_, ok := dc.Annotations["canary-pod"]
 	if ok {
 		l.Log.Debug(fmt.Sprintf("a canary pod for %s already exists", dc.Name), zap.String("deploymentconfig", dc.Name))
-		return
+		return nil, NothingToDo
 	}
 
 	failedImage, ok := dc.Annotations["canary-fail"]
 	if ok {
 		l.Log.Debug("a canary deployment has failed for this deploymentconfig, clear the annotations and try again",
 			zap.String("deploymentconfig", dc.GetName()), zap.String("failed", failedImage))
+		return nil, NothingToDo
+	}
+
+	name, image, err := getNameAndImage(*dc)
+	if err != nil {
+		return nil, err
+	}
+
+	containers := dc.Spec.Template.Spec.Containers
+
+	idx, err := findImage(name, containers)
+	if err != nil {
+		return nil, err
+	}
+	if containers[idx].Image == image {
+		return nil, NothingToDo
+	}
+
+	newContainers := dc.Spec.Template.Spec.DeepCopy().Containers
+	newContainers[idx].Image = image
+
+	return newContainers, nil
+}
+
+func (d *DeploymentWorker) checkDeploymentConfig(dc *v1.DeploymentConfig) {
+
+	containers, err := shouldSpawn(dc)
+	if err != nil {
 		return
 	}
 
-	podName, err := spawnCanary(*dc)
+	podName, err := d.spawnCanary(*dc, containers)
 	if err == nil {
 		dc.Annotations["canary-pod"] = podName
-		deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
-	} else if err, ok := err.(*NothingToDo); ok {
+		d.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+	} else if err == NothingToDo {
 		l.Log.Debug("deploymentconfig appears to be up to date", zap.String("deploymentconfig", dc.GetName()))
 	} else {
 		l.Log.Error("failed to spawn canary", zap.Error(err))
@@ -112,24 +147,28 @@ func findImage(name string, containers []apiv1.Container) (int, error) {
 	return -1, fmt.Errorf("container by name %s was not found", name)
 }
 
-func spawnCanary(dc v1.DeploymentConfig) (string, error) {
+func updateObjectMeta(objMeta *metav1.ObjectMeta, dc *v1.DeploymentConfig) {
+	delete(objMeta.Labels, "deploymentconfig")
+	objMeta.Labels["canary"] = "true"
+	objMeta.Labels["canary-for"] = dc.GetName()
+
+	duration, ok := dc.Annotations["canary-duration"]
+	if !ok {
+		duration = "15m"
+	}
+	if objMeta.Annotations == nil {
+		objMeta.Annotations = make(map[string]string)
+	}
+	objMeta.Annotations["canary-duration"] = duration
+
+	objMeta.SetGenerateName(fmt.Sprintf("%s-canary-", dc.GetName()))
+}
+
+func (d *DeploymentWorker) spawnCanary(dc v1.DeploymentConfig, containers []apiv1.Container) (string, error) {
 	podTemplateSpec := dc.Spec.Template.DeepCopy()
+	podTemplateSpec.Spec.Containers = containers
 
-	name, image, err := getNameAndImage(dc)
-	if err != nil {
-		return "", err
-	}
-
-	idx, err := findImage(name, podTemplateSpec.Spec.Containers)
-	if err != nil {
-		return "", err
-	}
-	if podTemplateSpec.Spec.Containers[idx].Image == image {
-		return "", &NothingToDo{}
-	}
-	podTemplateSpec.Spec.Containers[idx].Image = image
-
-	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
+	pods, err := d.clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("canary=%s", dc.GetName()),
 	})
 	if err != nil {
@@ -143,21 +182,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	l.Log.Debug("incoming dc", zap.Reflect("deploymentconfig", dc))
 
 	om := podTemplateSpec.ObjectMeta
-
-	delete(om.Labels, "deploymentconfig")
-	om.Labels["canary"] = "true"
-	om.Labels["canary-for"] = dc.GetName()
-
-	duration, ok := dc.Annotations["canary-duration"]
-	if !ok {
-		duration = "15m"
-	}
-	if om.Annotations == nil {
-		om.Annotations = make(map[string]string)
-	}
-	om.Annotations["canary-duration"] = duration
-
-	om.SetGenerateName(fmt.Sprintf("%s-canary-", dc.GetName()))
+	updateObjectMeta(&om, &dc)
 
 	podDef := &apiv1.Pod{
 		Spec:       podTemplateSpec.Spec,
@@ -167,7 +192,7 @@ func spawnCanary(dc v1.DeploymentConfig) (string, error) {
 	l.Log.Info("creating canary pod", zap.String("deploymentconfig", dc.GetName()))
 	l.Log.Debug("pod definition", zap.Reflect("pod", podDef))
 
-	pod, err := clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
+	pod, err := d.clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create pod: %v", err)
 	}
