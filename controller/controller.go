@@ -30,7 +30,7 @@ import (
 )
 
 type Worker interface {
-	Work(*Controller, string) error
+	Work(obj interface{}) error
 }
 
 type Controller struct {
@@ -52,7 +52,20 @@ func (c *Controller) processNextItem() bool {
 	defer c.Queue.Done(key)
 
 	// Invoke the method containing the business logic
-	err := c.Worker.Work(c, key.(string))
+	stringKey := key.(string)
+	obj, exists, err := c.Indexer.GetByKey(stringKey)
+	if err != nil {
+		l.Log.Error(fmt.Sprintf("fetching object with key %s from store failed with %v", key, err), zap.Error(err))
+		c.handleErr(err, key)
+		return true
+	}
+
+	if !exists {
+		l.Log.Debug(fmt.Sprintf("resource %s does not exist anymore", stringKey))
+		return true
+	}
+
+	err = c.Worker.Work(obj)
 	// Handle the error if something went wrong during the execution of the business logic
 	c.handleErr(err, key)
 	return true
@@ -70,7 +83,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 
 	// This controller retries 5 times if something goes wrong. After that, it stops trying.
 	if c.Queue.NumRequeues(key) < 5 {
-		l.Log.Info(fmt.Sprintf("Error syncing deploymentconfig"), zap.Reflect("deploymentconfig", key), zap.Error(err))
+		l.Log.Info(fmt.Sprintf("Error syncing resource"), zap.Reflect("resource", key), zap.Error(err))
 
 		// Re-enqueue the key rate limited. Based on the rate limiter on the
 		// queue and the re-enqueue history, the key will be processed later again.
@@ -81,7 +94,7 @@ func (c *Controller) handleErr(err error, key interface{}) {
 	c.Queue.Forget(key)
 	// Report to an external entity that, even after several retries, we could not successfully process this key
 	runtime.HandleError(err)
-	l.Log.Info(fmt.Sprintf("Dropping pod %q out of the queue", key), zap.Error(err))
+	l.Log.Info(fmt.Sprintf("Dropping resource %q out of the queue", key), zap.Error(err))
 }
 
 // Run comment
@@ -90,7 +103,7 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 
 	// Let the workers stop when we are done
 	defer c.Queue.ShutDown()
-	l.Log.Info("Starting DeploymentConfig controller")
+	l.Log.Info("Starting controller")
 
 	go c.Informer.Run(stopCh)
 
@@ -105,7 +118,7 @@ func (c *Controller) Run(threadiness int, stopCh chan struct{}) {
 	}
 
 	<-stopCh
-	l.Log.Info("Stopping DeploymentConfig controller")
+	l.Log.Info("Stopping controller")
 }
 
 func (c *Controller) runWorker() {

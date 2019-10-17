@@ -32,21 +32,12 @@ func NewWorker() *PodWorker {
 	}
 }
 
-func (p *PodWorker) Work(c *ctl.Controller, key string) error {
-	obj, exists, err := c.Indexer.GetByKey(key)
-	if err != nil {
-		l.Log.Error(fmt.Sprintf("Fetching object with key %s from store failed with %v", key, err), zap.Error(err))
-		return err
+func (p *PodWorker) Work(obj interface{}) error {
+	pod, ok := obj.(*apiv1.Pod)
+	if !ok {
+		return fmt.Errorf("object type was unexpected")
 	}
-
-	if !exists {
-		// Below we will warm up our cache with a Pod, so that we will see a delete for one pod
-		l.Log.Debug(fmt.Sprintf("deploymentconfig %s does not exist anymore", key))
-	} else {
-		// Note that you also have to check the uid if you have a local controlled resource, which
-		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
-		p.check(obj.(*apiv1.Pod))
-	}
+	p.check(pod)
 	return nil
 }
 
