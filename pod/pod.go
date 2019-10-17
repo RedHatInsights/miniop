@@ -7,30 +7,61 @@ import (
 	v1 "github.com/openshift/api/apps/v1"
 	appsv1 "github.com/openshift/client-go/apps/clientset/versioned/typed/apps/v1"
 	"github.com/redhatinsights/miniop/client"
+	ctl "github.com/redhatinsights/miniop/controller"
 	l "github.com/redhatinsights/miniop/logger"
 	"go.uber.org/zap"
 	apiv1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/cache"
 )
-
-var clientset = client.GetClientset()
-var deploymentsClient = appsv1.NewForConfigOrDie(client.GetConfig())
 
 func init() {
 	l.InitLogger()
 }
 
-func MonitorCanaries() {
-	pods, err := clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
-		LabelSelector: "canary=true",
-	})
+type PodWorker struct {
+	deploymentsClient *appsv1.AppsV1Client
+	clientset         *kubernetes.Clientset
+}
+
+func NewWorker() *PodWorker {
+	return &PodWorker{
+		deploymentsClient: appsv1.NewForConfigOrDie(client.GetConfig()),
+		clientset:         client.GetClientset(),
+	}
+}
+
+func (p *PodWorker) Work(c *ctl.Controller, key string) error {
+	obj, exists, err := c.Indexer.GetByKey(key)
 	if err != nil {
-		l.Log.Error("failed to select pods", zap.Error(err))
-		return
+		l.Log.Error(fmt.Sprintf("Fetching object with key %s from store failed with %v", key, err), zap.Error(err))
+		return err
 	}
-	for _, pod := range pods.Items {
-		check(&pod)
+
+	if !exists {
+		// Below we will warm up our cache with a Pod, so that we will see a delete for one pod
+		l.Log.Debug(fmt.Sprintf("deploymentconfig %s does not exist anymore", key))
+	} else {
+		// Note that you also have to check the uid if you have a local controlled resource, which
+		// is dependent on the actual instance, to detect that a Pod was recreated with the same name
+		p.check(obj.(*apiv1.Pod))
 	}
+	return nil
+}
+
+func (p *PodWorker) Start() {
+
+	podListerWatcher := cache.NewFilteredListWatchFromClient(
+		p.clientset.RESTClient(),
+		"pods",
+		client.GetNamespace(),
+		func(opts *metav1.ListOptions) {
+			opts.LabelSelector = "canary=true"
+		},
+	)
+
+	ctl.Start(podListerWatcher, &apiv1.Pod{}, p, 60*time.Second)
 }
 
 func getNameAndImage(dc v1.DeploymentConfig) (string, string, error) {
@@ -49,14 +80,14 @@ func getNameAndImage(dc v1.DeploymentConfig) (string, string, error) {
 	return name, image, nil
 }
 
-func check(pod *apiv1.Pod) {
+func (p *PodWorker) check(pod *apiv1.Pod) {
 	canaryFor, ok := pod.Labels["canary-for"]
 	if !ok {
 		l.Log.Debug("canary pod does not have a canary-for label", zap.String("pod", pod.GetName()))
 		return
 	}
 
-	dc, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
+	dc, err := p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
 	if err != nil {
 		l.Log.Error("failed to fetch deployment", zap.Error(err))
 		return
@@ -75,7 +106,7 @@ func check(pod *apiv1.Pod) {
 
 		if status.Image != image {
 			// this canary is likely out of date
-			if err := deletePod(pod); err != nil {
+			if err := p.deletePod(pod); err != nil {
 				l.Log.Error("failed to delete stale canary pod", zap.Error(err))
 				return
 			}
@@ -86,12 +117,12 @@ func check(pod *apiv1.Pod) {
 		if status.RestartCount > 0 {
 			dc.Annotations["canary-fail"] = status.Image
 			delete(dc.Annotations, "canary-pod")
-			deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+			p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 
 			l.Log.Info("canary image had container restarts, marking as failed",
 				zap.String("deploymentconfig", canaryFor), zap.String("canary", status.Image))
 
-			if err := deletePod(pod); err != nil {
+			if err := p.deletePod(pod); err != nil {
 				l.Log.Error("failed to delete stale canary pod", zap.Error(err))
 			}
 			return
@@ -115,11 +146,11 @@ func check(pod *apiv1.Pod) {
 	}
 
 	l.Log.Info(fmt.Sprintf("canary pod %s for deployment %s is old enough, upgrading the deployment...", pod.GetName(), canaryFor), zap.String("deploymentconfig", canaryFor))
-	upgrade(pod, canaryFor)
+	p.upgrade(pod, canaryFor)
 }
 
-func upgrade(pod *apiv1.Pod, canaryFor string) {
-	dc, err := deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
+func (p *PodWorker) upgrade(pod *apiv1.Pod, canaryFor string) {
+	dc, err := p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
 	if err != nil {
 		l.Log.Error("failed to fetch deployment", zap.Error(err))
 		return
@@ -129,13 +160,13 @@ func upgrade(pod *apiv1.Pod, canaryFor string) {
 		return
 	}
 
-	if err := deletePod(pod); err != nil {
+	if err := p.deletePod(pod); err != nil {
 		l.Log.Error("failed to delete pod, not updating deployment", zap.Error(err))
 		return
 	}
 
 	delete(dc.Annotations, "canary-pod")
-	deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+	p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
 	l.Log.Info(fmt.Sprintf("canary for %s completed, upgrading", canaryFor), zap.String("deploymentconfig", canaryFor))
 }
 
@@ -149,8 +180,8 @@ func updateContainer(dc *v1.DeploymentConfig) bool {
 	return false
 }
 
-func deletePod(pod *apiv1.Pod) error {
-	if err := clientset.CoreV1().Pods(client.GetNamespace()).Delete(pod.GetName(), &metav1.DeleteOptions{}); err != nil {
+func (p *PodWorker) deletePod(pod *apiv1.Pod) error {
+	if err := p.clientset.CoreV1().Pods(client.GetNamespace()).Delete(pod.GetName(), &metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 	return nil

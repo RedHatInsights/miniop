@@ -114,7 +114,7 @@ func (c *Controller) runWorker() {
 }
 
 // Start comment
-func Start(lw cache.ListerWatcher, objType r.Object, worker Worker) {
+func Start(lw cache.ListerWatcher, objType r.Object, worker Worker, resyncPeriod time.Duration) {
 	// create the workqueue
 	queue := workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter())
 
@@ -122,7 +122,7 @@ func Start(lw cache.ListerWatcher, objType r.Object, worker Worker) {
 	// whenever the cache is updated, the pod key is added to the workqueue.
 	// Note that when we finally process the item from the workqueue, we might see a newer version
 	// of the Pod than the version which was responsible for triggering the update.
-	indexer, informer := cache.NewIndexerInformer(lw, objType, 0, cache.ResourceEventHandlerFuncs{
+	indexer, informer := cache.NewIndexerInformer(lw, objType, resyncPeriod, cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			key, err := cache.MetaNamespaceKeyFunc(obj)
 			if err == nil {

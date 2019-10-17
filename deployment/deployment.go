@@ -62,7 +62,7 @@ func (d *DeploymentWorker) Start() {
 		},
 	)
 
-	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, d)
+	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, d, 0)
 }
 
 // NothingToDo is returned as an error if a deployment is up to date

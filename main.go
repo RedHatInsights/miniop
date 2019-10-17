@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"time"
 
 	"github.com/go-chi/chi"
 	"github.com/go-chi/chi/middleware"
@@ -45,21 +44,8 @@ func main() {
 		close(idleConnsClosed)
 	}()
 
-	go func(done chan struct{}) {
-		for {
-			select {
-			case <-done:
-				return
-			default:
-				pod.MonitorCanaries()
-				time.Sleep(1 * time.Minute)
-			}
-		}
-	}(idleConnsClosed)
-
-	deploymentWorker := deployment.NewDeploymentWorker()
-
-	go deploymentWorker.Start()
+	go pod.NewWorker().Start()
+	go deployment.NewDeploymentWorker().Start()
 
 	l.Log.Info("starting web server")
 	if err := srv.ListenAndServe(); err != http.ErrServerClosed {
