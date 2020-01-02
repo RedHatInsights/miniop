@@ -27,8 +27,8 @@ type PodWorker struct {
 
 func NewWorker() *PodWorker {
 	return &PodWorker{
-		deploymentsClient: appsv1.NewForConfigOrDie(client.GetConfig()),
-		clientset:         client.GetClientset(),
+		deploymentsClient: appsv1.NewForConfigOrDie(client.Config),
+		clientset:         client.Clientset,
 	}
 }
 
@@ -46,7 +46,7 @@ func (p *PodWorker) Start() {
 	podListerWatcher := cache.NewFilteredListWatchFromClient(
 		p.clientset.RESTClient(),
 		"pods",
-		client.GetNamespace(),
+		client.Namespace,
 		func(opts *metav1.ListOptions) {
 			opts.LabelSelector = "canary=true"
 		},
@@ -78,7 +78,7 @@ func (p *PodWorker) check(pod *apiv1.Pod) {
 		return
 	}
 
-	dc, err := p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
+	dc, err := p.deploymentsClient.DeploymentConfigs(client.Namespace).Get(canaryFor, metav1.GetOptions{})
 	if err != nil {
 		l.Log.Error("failed to fetch deployment", zap.Error(err))
 		return
@@ -108,7 +108,7 @@ func (p *PodWorker) check(pod *apiv1.Pod) {
 		if status.RestartCount > 0 {
 			dc.Annotations["canary-fail"] = status.Image
 			delete(dc.Annotations, "canary-pod")
-			p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+			p.deploymentsClient.DeploymentConfigs(client.Namespace).Update(dc)
 
 			l.Log.Info("canary image had container restarts, marking as failed",
 				zap.String("deploymentconfig", canaryFor), zap.String("canary", status.Image))
@@ -141,7 +141,7 @@ func (p *PodWorker) check(pod *apiv1.Pod) {
 }
 
 func (p *PodWorker) upgrade(pod *apiv1.Pod, canaryFor string) {
-	dc, err := p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Get(canaryFor, metav1.GetOptions{})
+	dc, err := p.deploymentsClient.DeploymentConfigs(client.Namespace).Get(canaryFor, metav1.GetOptions{})
 	if err != nil {
 		l.Log.Error("failed to fetch deployment", zap.Error(err))
 		return
@@ -157,7 +157,7 @@ func (p *PodWorker) upgrade(pod *apiv1.Pod, canaryFor string) {
 	}
 
 	delete(dc.Annotations, "canary-pod")
-	p.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+	p.deploymentsClient.DeploymentConfigs(client.Namespace).Update(dc)
 	l.Log.Info(fmt.Sprintf("canary for %s completed, upgrading", canaryFor), zap.String("deploymentconfig", canaryFor))
 }
 
@@ -172,7 +172,7 @@ func updateContainer(dc *v1.DeploymentConfig) bool {
 }
 
 func (p *PodWorker) deletePod(pod *apiv1.Pod) error {
-	if err := p.clientset.CoreV1().Pods(client.GetNamespace()).Delete(pod.GetName(), &metav1.DeleteOptions{}); err != nil {
+	if err := p.clientset.CoreV1().Pods(client.Namespace).Delete(pod.GetName(), &metav1.DeleteOptions{}); err != nil {
 		return err
 	}
 	return nil

@@ -11,10 +11,13 @@ var Config *rest.Config
 var Clientset *kubernetes.Clientset
 var Namespace string
 
-func GetConfig() *rest.Config {
-	if Config != nil {
-		return Config
-	}
+func init() {
+	Config = getConfig()
+	Clientset = getClientset()
+	Namespace = getNamespace()
+}
+
+func getConfig() *rest.Config {
 	Config, err := rest.InClusterConfig()
 	if err != nil {
 		panic(err.Error())
@@ -22,25 +25,18 @@ func GetConfig() *rest.Config {
 	return Config
 }
 
-func GetClientset() *kubernetes.Clientset {
-	if Clientset != nil {
-		return Clientset
-	}
-	Clientset, err := kubernetes.NewForConfig(GetConfig())
+func getClientset() *kubernetes.Clientset {
+	Clientset, err := kubernetes.NewForConfig(getConfig())
 	if err != nil {
 		panic(err.Error())
 	}
 	return Clientset
 }
 
-func GetNamespace() string {
-	if Namespace != "" {
-		return Namespace
-	}
+func getNamespace() string {
 	content, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 	if err != nil {
-		return ""
+		panic(err.Error())
 	}
-	Namespace = string(content)
-	return Namespace
+	return string(content)
 }

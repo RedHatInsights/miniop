@@ -26,8 +26,7 @@ var killCounter = promauto.NewCounterVec(prometheus.CounterOpts{
 }, []string{"deployment"})
 
 func kill(pod string) (int, error) {
-	clientset := client.GetClientset()
-	p, err := clientset.CoreV1().Pods(client.GetNamespace()).Get(pod, metav1.GetOptions{})
+	p, err := client.Clientset.CoreV1().Pods(client.Namespace).Get(pod, metav1.GetOptions{})
 	if errors.IsNotFound(err) {
 		return http.StatusNotFound, err
 	} else if _, isStatus := err.(*errors.StatusError); isStatus {
@@ -36,7 +35,13 @@ func kill(pod string) (int, error) {
 		return http.StatusInternalServerError, err
 	}
 
-	err = clientset.CoreV1().Pods(client.GetNamespace()).Delete(p.GetName(), &metav1.DeleteOptions{})
+	p.Annotations["killed-by"] = "pod-killer"
+	p, err = client.Clientset.CoreV1().Pods(client.Namespace).Update(p)
+	if err != nil {
+		return http.StatusInternalServerError, err
+	}
+
+	err = client.Clientset.CoreV1().Pods(client.Namespace).Delete(p.GetName(), &metav1.DeleteOptions{})
 	if err != nil {
 		return http.StatusInternalServerError, err
 	}

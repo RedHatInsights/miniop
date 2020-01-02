@@ -27,8 +27,8 @@ type DeploymentWorker struct {
 
 func NewDeploymentWorker() *DeploymentWorker {
 	return &DeploymentWorker{
-		deploymentsClient: appsv1.NewForConfigOrDie(client.GetConfig()),
-		clientset:         client.GetClientset(),
+		deploymentsClient: appsv1.NewForConfigOrDie(client.Config),
+		clientset:         client.Clientset,
 	}
 }
 
@@ -47,7 +47,7 @@ func (d *DeploymentWorker) Start() {
 	dcListerWatcher := cache.NewFilteredListWatchFromClient(
 		d.deploymentsClient.RESTClient(),
 		"deploymentconfigs",
-		client.GetNamespace(),
+		client.Namespace,
 		func(opts *metav1.ListOptions) {
 			opts.LabelSelector = "canary=true"
 		},
@@ -104,7 +104,7 @@ func (d *DeploymentWorker) checkDeploymentConfig(dc *v1.DeploymentConfig) {
 	podName, err := d.spawnCanary(*dc, containers)
 	if err == nil {
 		dc.Annotations["canary-pod"] = podName
-		d.deploymentsClient.DeploymentConfigs(client.GetNamespace()).Update(dc)
+		d.deploymentsClient.DeploymentConfigs(client.Namespace).Update(dc)
 	} else if err == NothingToDo {
 		l.Log.Debug("deploymentconfig appears to be up to date", zap.String("deploymentconfig", dc.GetName()))
 	} else {
@@ -159,7 +159,7 @@ func (d *DeploymentWorker) spawnCanary(dc v1.DeploymentConfig, containers []apiv
 	podTemplateSpec := dc.Spec.Template.DeepCopy()
 	podTemplateSpec.Spec.Containers = containers
 
-	pods, err := d.clientset.CoreV1().Pods(client.GetNamespace()).List(metav1.ListOptions{
+	pods, err := d.clientset.CoreV1().Pods(client.Namespace).List(metav1.ListOptions{
 		LabelSelector: fmt.Sprintf("canary=%s", dc.GetName()),
 	})
 	if err != nil {
@@ -183,7 +183,7 @@ func (d *DeploymentWorker) spawnCanary(dc v1.DeploymentConfig, containers []apiv
 	l.Log.Info("creating canary pod", zap.String("deploymentconfig", dc.GetName()))
 	l.Log.Debug("pod definition", zap.Reflect("pod", podDef))
 
-	pod, err := d.clientset.CoreV1().Pods(client.GetNamespace()).Create(podDef)
+	pod, err := d.clientset.CoreV1().Pods(client.Namespace).Create(podDef)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create pod: %v", err)
 	}
