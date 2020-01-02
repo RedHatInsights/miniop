@@ -15,6 +15,7 @@ import (
 	l "github.com/redhatinsights/miniop/logger"
 	"github.com/redhatinsights/miniop/pod"
 	"go.uber.org/zap"
+	klogb "k8s.io/klog"
 	"k8s.io/klog/v2"
 	"k8s.io/klog/v2/klogr"
 )
@@ -29,6 +30,9 @@ func main() {
 	flag.Parse()
 	kl := klogr.New().WithName("MiniOp")
 	kl.Info("klog initialized...")
+	if bool(klogb.V(9)) {
+		kl.Info("-v 9 is enabled")
+	}
 	klog.Flush()
 
 	r := chi.NewRouter()
