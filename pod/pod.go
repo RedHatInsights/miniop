@@ -45,7 +45,7 @@ func (p *PodWorker) Work(obj interface{}) error {
 func (p *PodWorker) Start() {
 
 	podListerWatcher := cache.NewFilteredListWatchFromClient(
-		p.clientset.RESTClient(),
+		p.clientset.CoreV1().RESTClient(),
 		"pods",
 		client.Namespace,
 		func(opts *metav1.ListOptions) {
