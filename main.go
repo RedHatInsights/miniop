@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"net/http"
 	"os"
 	"os/signal"
@@ -14,15 +15,21 @@ import (
 	l "github.com/redhatinsights/miniop/logger"
 	"github.com/redhatinsights/miniop/pod"
 	"go.uber.org/zap"
-	"k8s.io/klog"
+	"k8s.io/klog/v2"
+	"k8s.io/klog/v2/klogr"
 )
 
 func init() {
 	l.InitLogger()
-	klog.InitFlags(nil)
 }
 
 func main() {
+
+	klog.InitFlags(nil)
+	flag.Parse()
+	kl := klogr.New().WithName("MiniOp")
+	kl.Info("klog initialized...")
+	klog.Flush()
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
