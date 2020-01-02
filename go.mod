@@ -8,7 +8,7 @@ require (
 	github.com/googleapis/gnostic v0.3.1 // indirect
 	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/openshift/api v3.9.0+incompatible
-	github.com/openshift/client-go v3.9.0+incompatible
+	github.com/openshift/client-go v0.0.0-20180830153425-431ec9a26e50
 	github.com/prometheus/alertmanager v0.19.0
 	github.com/prometheus/client_golang v1.1.0
 	github.com/spf13/viper v1.4.0
