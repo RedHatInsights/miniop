@@ -53,6 +53,7 @@ func (d *DeploymentWorker) Start() {
 		},
 	)
 
+	l.Log.Info("starting dc watcher")
 	ctl.Start(dcListerWatcher, &v1.DeploymentConfig{}, d, 0)
 }
 

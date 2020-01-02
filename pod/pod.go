@@ -52,6 +52,7 @@ func (p *PodWorker) Start() {
 		},
 	)
 
+	l.Log.Info("starting pod watcher")
 	ctl.Start(podListerWatcher, &apiv1.Pod{}, p, 60*time.Second)
 }
 

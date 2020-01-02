@@ -18,7 +18,6 @@ import (
 	"github.com/redhatinsights/miniop/pod"
 	"go.uber.org/zap"
 	"k8s.io/klog"
-	"k8s.io/klog/v2/klogr"
 )
 
 func init() {
@@ -30,9 +29,7 @@ func main() {
 	klog.InitFlags(nil)
 	flag.Parse()
 
-	kl := klogr.New().WithName("MiniOp")
-	kl.Info("klog initialized...")
-	klog.Flush()
+	klog.V(9).Info("klog initialized with verbosity 9")
 
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
