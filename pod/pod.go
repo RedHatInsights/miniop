@@ -14,6 +14,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/cache"
+	"k8s.io/klog"
 )
 
 func init() {
@@ -53,6 +54,7 @@ func (p *PodWorker) Start() {
 	)
 
 	l.Log.Info("starting pod watcher")
+	klog.V(9).Info("can see klog")
 	ctl.Start(podListerWatcher, &apiv1.Pod{}, p, 60*time.Second)
 }
 
