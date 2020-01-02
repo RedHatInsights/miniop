@@ -14,10 +14,12 @@ import (
 	l "github.com/redhatinsights/miniop/logger"
 	"github.com/redhatinsights/miniop/pod"
 	"go.uber.org/zap"
+	"k8s.io/klog"
 )
 
 func init() {
 	l.InitLogger()
+	klog.InitFlags(nil)
 }
 
 func main() {

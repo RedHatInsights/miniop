@@ -19,5 +19,5 @@ require (
 	k8s.io/api v0.0.0-20190813020757-36bff7324fb7
 	k8s.io/apimachinery v0.0.0-20190809020650-423f5d784010
 	k8s.io/client-go v12.0.0+incompatible
-	k8s.io/klog v0.4.0
+	k8s.io/klog v1.0.0
 )
