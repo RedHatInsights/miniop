@@ -66,7 +66,10 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	podname := message.CommonLabels["kubernetes_pod_name"]
+	podname, ok := message.CommonLabels["kubernetes_pod_name"]
+	if !ok {
+		podname = message.Alerts.Firing()[0].Labels["kubernetes_pod_name"]
+	}
 
 	l.Log.Info(fmt.Sprintf("got a request to kill %s", podname), zap.String("pod", podname), zap.Reflect("message", message))
 
