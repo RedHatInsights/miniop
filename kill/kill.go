@@ -68,7 +68,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 
 	podname := message.CommonLabels["kubernetes_pod_name"]
 
-	l.Log.Info(fmt.Sprintf("got a request to kill %s", podname), zap.String("pod", podname))
+	l.Log.Info(fmt.Sprintf("got a request to kill %s", podname), zap.String("pod", podname), zap.Reflect("message", message))
 
 	code, err := kill(podname)
 	if err != nil {
